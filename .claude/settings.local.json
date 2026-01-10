@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m http.server:*)",
+      "Bash(timeout 3 cmd:*)",
+      "Bash(start chrome http://localhost:8000)",
+      "Bash(dir:*)",
+      "Bash(ren:*)",
+      "Bash(move \"index \\(3\\).html\" \"index.html\")",
+      "Bash(tasklist:*)",
+      "Bash(taskkill /F /PID 12340)",
+      "Bash(taskkill //F //PID 12340)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

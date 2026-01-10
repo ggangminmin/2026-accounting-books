@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="회계관리">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>2026 회계 관리 V2</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: inherit;
+      touch-action: manipulation;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.95);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      margin-bottom: 16px;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 16px;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 24px;
+      padding: 24px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .number-display {
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+    }
+
+    textarea {
+      resize: vertical;
+      font-family: inherit;
+    }
+
+    select {
+      cursor: pointer;
+    }
+
+    @media (max-width: 768px) {
+      .btn {
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      h1 {
+        font-size: 24px !important;
+      }
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .month-item {
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .receipt-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .receipt-preview-item {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid #e5e7eb;
+    }
+
+    .receipt-preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .receipt-remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(239, 68, 68, 0.9);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Supabase 초기화
+    const SUPABASE_URL = 'https://albrnqpfwnykdlpvvliw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsYnJucXBmd255a2RscHZ2bGl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NjE4NTQsImV4cCI6MjA4MzEzNzg1NH0.jIkx_poj0l6MBv074Bbc3AgIgaggMwyXGKb63_X38V4';
+    const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const Icon = ({ type, size = 20 }) => {
+      const icons = {
+        plus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+        download: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
+        upload: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
+        trash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
+        eye: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
+        image: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>,
+        x: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+        users: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      };
+      return icons[type] || null;
+    };
+
+    const AccountingApp = () => {
+      // 초기 예산 설정 (각 항목별 독립적 관리)
+      const INITIAL_GENERAL_BUDGET = 3200000;  // 일반 예산 초기값
+      const INITIAL_DONATIONS = 11133;         // 찬조금 초기값
+      const INITIAL_MEMBERSHIP = 496000;       // 회비 초기값
+
+      // 독립적 잔액 State
+      const [generalBudget, setGeneralBudget] = useState(INITIAL_GENERAL_BUDGET);
+      const [donations, setDonations] = useState(INITIAL_DONATIONS);
+      const [membershipFee, setMembershipFee] = useState(INITIAL_MEMBERSHIP);
+
+      const [expenses, setExpenses] = useState([]);
+      const [membershipList, setMembershipList] = useState([]);
+      const [donationsList, setDonationsList] = useState([]);
+      const [showAddForm, setShowAddForm] = useState(false);
+      const [showMembershipForm, setShowMembershipForm] = useState(false);
+      const [showDonationsForm, setShowDonationsForm] = useState(false);
+      const [editingExpense, setEditingExpense] = useState(null);
+      const [viewMode, setViewMode] = useState('dashboard');
+      const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+      const [viewingReceipt, setViewingReceipt] = useState(null);
+
+      const [formData, setFormData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        amount: '',
+        category: '찬양팀 식사',
+        memo: '',
+        account: '일반 예산',
+        receipts: []
+      });
+
+      const [membershipFormData, setMembershipFormData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        name: '',
+        amount: '',
+        memo: ''
+      });
+
+      const [donationsFormData, setDonationsFormData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        name: '',
+        amount: '',
+        memo: ''
+      });
+
+      // 숫자를 쉼표 포맷으로 변환
+      const formatNumber = (num) => {
+        if (!num && num !== 0) return '';
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      };
+
+      // 쉼표가 포함된 문자열을 숫자로 변환
+      const parseNumber = (str) => {
+        if (!str) return '';
+        return str.replace(/,/g, '');
+      };
+
+      // ============ Supabase 함수들 ============
+
+      // Supabase에서 데이터 로드
+      const loadFromSupabase = async () => {
+        try {
+          const { data: expensesData, error: expensesError } = await supabaseClient
+            .from('expenses')
+            .select('*')
+            .order('date', { ascending: false });
+
+          if (expensesError) throw expensesError;
+
+          const { data: settingsData, error: settingsError } = await supabaseClient
+            .from('settings')
+            .select('*');
+
+          if (settingsError) throw settingsError;
+
+          if (expensesData) {
+            setExpenses(expensesData.map(exp => ({
+              ...exp,
+              receipts: exp.receipts || []
+            })));
+          }
+
+          let generalBudgetItem, donationsItem, membershipItem;
+
+          if (settingsData) {
+            generalBudgetItem = settingsData.find(s => s.key === 'general_budget');
+            donationsItem = settingsData.find(s => s.key === 'donations');
+            membershipItem = settingsData.find(s => s.key === 'membership_fee');
+
+            if (generalBudgetItem) setGeneralBudget(generalBudgetItem.value);
+            if (donationsItem) setDonations(donationsItem.value);
+            if (membershipItem) setMembershipFee(membershipItem.value);
+          }
+
+          console.log('✅ Supabase 데이터 로드 완료:', {
+            일반예산: generalBudgetItem?.value || INITIAL_GENERAL_BUDGET,
+            회비: membershipItem?.value || INITIAL_MEMBERSHIP,
+            찬조금: donationsItem?.value || INITIAL_DONATIONS
+          });
+        } catch (error) {
+          console.error('❌ Supabase 로드 실패:', error);
+        }
+      };
+
+      // Supabase에 지출 저장
+      const saveExpenseToSupabase = async (expense) => {
+        try {
+          console.log('📤 지출 데이터 전송 시도:', {
+            id: expense.id,
+            date: expense.date,
+            amount: expense.amount,
+            category: expense.category,
+            account: expense.account,
+            receiptsCount: expense.receipts?.length || 0
+          });
+
+          const { data, error } = await supabaseClient
+            .from('expenses')
+            .insert([{
+              id: expense.id,
+              date: expense.date,
+              amount: expense.amount,
+              category: expense.category,
+              memo: expense.memo,
+              account: expense.account,
+              receipts: expense.receipts || []
+            }]);
+
+          if (error) {
+            console.error('❌ Supabase 에러 상세:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
+            throw error;
+          }
+          console.log('✅ 지출 저장 완료:', expense.id);
+        } catch (error) {
+          console.error('❌ 지출 저장 실패 (catch):', error);
+          alert(`저장 실패: ${error.message}\n\n데이터베이스 스키마를 확인하세요. migration.sql을 Supabase에서 실행했나요?`);
+          throw error;
+        }
+      };
+
+      // Supabase에서 지출 삭제
+      const deleteExpenseFromSupabase = async (id) => {
+        try {
+          const { error } = await supabaseClient
+            .from('expenses')
+            .delete()
+            .eq('id', id);
+
+          if (error) throw error;
+          console.log('✅ 지출 삭제 완료:', id);
+        } catch (error) {
+          console.error('❌ 지출 삭제 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에서 지출 업데이트
+      const updateExpenseInSupabase = async (expense) => {
+        try {
+          const { error } = await supabaseClient
+            .from('expenses')
+            .update({
+              date: expense.date,
+              amount: expense.amount,
+              category: expense.category,
+              memo: expense.memo,
+              account: expense.account,
+              receipts: expense.receipts || []
+            })
+            .eq('id', expense.id);
+
+          if (error) throw error;
+          console.log('✅ 지출 업데이트 완료:', expense.id);
+        } catch (error) {
+          console.error('❌ 지출 업데이트 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에 설정 업데이트
+      const updateSettingInSupabase = async (key, value) => {
+        try {
+          console.log('📤 설정 업데이트 시도:', { key, value });
+
+          const { error } = await supabaseClient
+            .from('settings')
+            .update({ value: value })
+            .eq('key', key);
+
+          if (error) {
+            console.error('❌ Supabase 설정 에러:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
+            throw error;
+          }
+          console.log('✅ 설정 업데이트 완료:', key, '→', value);
+        } catch (error) {
+          console.error('❌ 설정 업데이트 실패 (catch):', error);
+        }
+      };
+
+      // Supabase Storage에 영수증 업로드
+      const uploadReceiptToSupabase = async (id, dataUrl, index) => {
+        try {
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+
+          const fileName = `${id}_${index}.jpg`;
+          const { data, error } = await supabaseClient.storage
+            .from('receipts')
+            .upload(fileName, blob, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+
+          if (error) throw error;
+          console.log('✅ 영수증 업로드 완료:', fileName);
+          return fileName;
+        } catch (error) {
+          console.error('❌ 영수증 업로드 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase Storage에서 영수증 URL 가져오기
+      const getReceiptUrlFromSupabase = (fileName) => {
+        const { data } = supabaseClient.storage
+          .from('receipts')
+          .getPublicUrl(fileName);
+
+        return data.publicUrl;
+      };
+
+      // Supabase Storage에서 영수증 삭제
+      const deleteReceiptFromSupabase = async (fileName) => {
+        try {
+          const { error } = await supabaseClient.storage
+            .from('receipts')
+            .remove([fileName]);
+
+          if (error) throw error;
+          console.log('✅ 영수증 삭제 완료:', fileName);
+        } catch (error) {
+          console.error('❌ 영수증 삭제 실패:', error);
+        }
+      };
+
+      useEffect(() => {
+        loadFromSupabase();
+
+        const saved = localStorage.getItem('accounting_2026_v2');
+
+        if (saved) {
+          const data = JSON.parse(saved);
+          setExpenses(data.expenses || []);
+          setGeneralBudget(data.generalBudget || INITIAL_GENERAL_BUDGET);
+          setDonations(data.donations || INITIAL_DONATIONS);
+          setMembershipFee(data.membershipFee || INITIAL_MEMBERSHIP);
+          setMembershipList(data.membershipList || []);
+          setDonationsList(data.donationsList || []);
+        }
+      }, []);
+
+      useEffect(() => {
+        if (expenses.length > 0 || generalBudget !== INITIAL_GENERAL_BUDGET || donations !== INITIAL_DONATIONS || membershipFee !== INITIAL_MEMBERSHIP) {
+          try {
+            const dataStr = JSON.stringify({
+              expenses,
+              generalBudget,
+              donations,
+              membershipFee,
+              membershipList,
+              donationsList
+            });
+
+            localStorage.setItem('accounting_2026_v2', dataStr);
+          } catch (e) {
+            console.error('저장 오류:', e);
+          }
+        }
+      }, [expenses, generalBudget, donations, membershipFee, membershipList, donationsList]);
+
+      const handleImageUpload = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length + formData.receipts.length > 5) {
+          alert('영수증은 최대 5장까지 첨부할 수 있습니다.');
+          return;
+        }
+
+        files.forEach(file => {
+          if (file.size > 10 * 1024 * 1024) {
+            alert('파일 크기가 너무 큽니다. 10MB 이하의 이미지를 선택해주세요.');
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+
+              const maxSize = 1200;
+              if (width > height && width > maxSize) {
+                height = (height * maxSize) / width;
+                width = maxSize;
+              } else if (height > maxSize) {
+                width = (width * maxSize) / height;
+                height = maxSize;
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+
+              const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+              setFormData(prev => ({
+                ...prev,
+                receipts: [...prev.receipts, compressedDataUrl]
+              }));
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const removeReceipt = (index) => {
+        setFormData(prev => ({
+          ...prev,
+          receipts: prev.receipts.filter((_, i) => i !== index)
+        }));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+          const expenseId = Date.now();
+          const receiptFileNames = [];
+
+          // 영수증 업로드
+          for (let i = 0; i < formData.receipts.length; i++) {
+            const fileName = await uploadReceiptToSupabase(expenseId, formData.receipts[i], i);
+            receiptFileNames.push(fileName);
+          }
+
+          const newExpense = {
+            id: expenseId,
+            date: formData.date,
+            amount: parseInt(formData.amount),
+            category: formData.category,
+            memo: formData.memo,
+            account: formData.account,
+            receipts: receiptFileNames
+          };
+
+          console.log('💰 지출 추가:', {
+            출처: formData.account,
+            금액: parseInt(formData.amount)
+          });
+
+          // 출처에 따라 해당 항목에서만 차감 (독립적 관리)
+          if (formData.account === '일반 예산') {
+            const newGeneralBudget = generalBudget - parseInt(formData.amount);
+            setGeneralBudget(newGeneralBudget);
+            updateSettingInSupabase('general_budget', newGeneralBudget);
+            console.log('✅ 일반 예산 차감:', generalBudget, '→', newGeneralBudget);
+          } else if (formData.account === '회비') {
+            const newMembershipFee = membershipFee - parseInt(formData.amount);
+            setMembershipFee(newMembershipFee);
+            updateSettingInSupabase('membership_fee', newMembershipFee);
+            console.log('✅ 회비 차감:', membershipFee, '→', newMembershipFee);
+          } else if (formData.account === '찬조금') {
+            const newDonations = donations - parseInt(formData.amount);
+            setDonations(newDonations);
+            updateSettingInSupabase('donations', newDonations);
+            console.log('✅ 찬조금 차감:', donations, '→', newDonations);
+          }
+
+          await saveExpenseToSupabase(newExpense);
+          setExpenses([newExpense, ...expenses]);
+
+          setFormData({
+            date: new Date().toISOString().split('T')[0],
+            amount: '',
+            category: '찬양팀 식사',
+            memo: '',
+            account: '일반 예산',
+            receipts: []
+          });
+          setShowAddForm(false);
+        } catch (error) {
+          alert('저장 중 오류가 발생했습니다: ' + error.message);
+        }
+      };
+
+      const deleteExpense = async (id) => {
+        if (window.confirm('이 항목을 삭제하시겠습니까?')) {
+          try {
+            const target = expenses.find(exp => exp.id === id);
+
+            console.log('🗑️ 지출 삭제 - 예산 복원:', {
+              출처: target.account,
+              금액: target.amount
+            });
+
+            // 해당 출처의 예산 복원 (독립적 관리)
+            if (target.account === '일반 예산') {
+              const newGeneralBudget = generalBudget + target.amount;
+              setGeneralBudget(newGeneralBudget);
+              updateSettingInSupabase('general_budget', newGeneralBudget);
+              console.log('✅ 일반 예산 복원:', generalBudget, '→', newGeneralBudget);
+            } else if (target.account === '회비') {
+              const newMembershipFee = membershipFee + target.amount;
+              setMembershipFee(newMembershipFee);
+              updateSettingInSupabase('membership_fee', newMembershipFee);
+              console.log('✅ 회비 복원:', membershipFee, '→', newMembershipFee);
+            } else if (target.account === '찬조금') {
+              const newDonations = donations + target.amount;
+              setDonations(newDonations);
+              updateSettingInSupabase('donations', newDonations);
+              console.log('✅ 찬조금 복원:', donations, '→', newDonations);
+            }
+
+            // 영수증 삭제
+            if (target.receipts && target.receipts.length > 0) {
+              for (const fileName of target.receipts) {
+                await deleteReceiptFromSupabase(fileName);
+              }
+            }
+
+            await deleteExpenseFromSupabase(id);
+            setExpenses(expenses.filter(e => e.id !== id));
+          } catch (error) {
+            alert('삭제 중 오류가 발생했습니다: ' + error.message);
+          }
+        }
+      };
+
+      const clearAllData = () => {
+        if (window.confirm('⚠️ 모든 데이터를 삭제하시겠습니까?\n\n백업하지 않은 데이터는 복구할 수 없습니다!')) {
+          if (window.confirm('정말로 삭제하시겠습니까? (두 번째 확인)')) {
+            localStorage.removeItem('accounting_2026_v2');
+            setExpenses([]);
+            setGeneralBudget(INITIAL_GENERAL_BUDGET);
+            setDonations(INITIAL_DONATIONS);
+            setMembershipFee(INITIAL_MEMBERSHIP);
+            setMembershipList([]);
+            setDonationsList([]);
+            alert('✅ 모든 데이터가 삭제되었습니다.');
+          }
+        }
+      };
+
+      const openReceipt = (fileName) => {
+        try {
+          const publicUrl = getReceiptUrlFromSupabase(fileName);
+          setViewingReceipt(publicUrl);
+        } catch (error) {
+          console.error('영수증 로드 에러:', error);
+          alert('영수증 이미지를 불러오지 못했습니다.');
+        }
+      };
+
+      // 지출 수정 취소 - 모달만 닫기 (복원 작업 없음)
+      const cancelEditExpense = () => {
+        console.log('❌ 수정 취소');
+        setEditingExpense(null);
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          amount: '',
+          category: '찬양팀 식사',
+          memo: '',
+          account: '일반 예산',
+          receipts: []
+        });
+      };
+
+      // 지출 수정 시작 - 모달만 열기 (복원은 저장 시점에 처리)
+      const startEditExpense = (expense) => {
+        console.log('🔄 수정 모달 열기:', {
+          기존출처: expense.account,
+          금액: expense.amount,
+          현재일반예산: generalBudget,
+          현재회비: membershipFee,
+          현재찬조금: donations
+        });
+
+        setEditingExpense(expense);
+        setFormData({
+          date: expense.date,
+          amount: expense.amount.toString(),
+          category: expense.category,
+          memo: expense.memo || '',
+          account: expense.account || '일반 예산',
+          receipts: []
+        });
+      };
+
+      // 지출 수정 제출 - 복원 + 차감 통합 처리
+      const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        try {
+          const receiptFileNames = [...(editingExpense.receipts || [])];
+
+          // 새 영수증 업로드
+          for (let i = 0; i < formData.receipts.length; i++) {
+            if (receiptFileNames.length < 5) {
+              const fileName = await uploadReceiptToSupabase(editingExpense.id, formData.receipts[i], receiptFileNames.length);
+              receiptFileNames.push(fileName);
+            }
+          }
+
+          const oldAccount = editingExpense.account;
+          const oldAmount = editingExpense.amount;
+          const newAccount = formData.account;
+          const newAmount = parseInt(formData.amount);
+
+          console.log('💾 수정 저장 - 예산 재계산:', {
+            '기존': `${oldAccount} ${oldAmount}원`,
+            '새로운': `${newAccount} ${newAmount}원`,
+            '현재 일반예산': generalBudget,
+            '현재 회비': membershipFee,
+            '현재 찬조금': donations
+          });
+
+          // 1단계: 기존 출처에 금액 복원
+          let updatedGeneralBudget = generalBudget;
+          let updatedMembershipFee = membershipFee;
+          let updatedDonations = donations;
+
+          if (oldAccount === '일반 예산') {
+            updatedGeneralBudget += oldAmount;
+            console.log('🔄 [복원] 일반 예산:', generalBudget, '→', updatedGeneralBudget);
+          } else if (oldAccount === '회비') {
+            updatedMembershipFee += oldAmount;
+            console.log('🔄 [복원] 회비:', membershipFee, '→', updatedMembershipFee);
+          } else if (oldAccount === '찬조금') {
+            updatedDonations += oldAmount;
+            console.log('🔄 [복원] 찬조금:', donations, '→', updatedDonations);
+          }
+
+          // 2단계: 새 출처에서 금액 차감
+          if (newAccount === '일반 예산') {
+            updatedGeneralBudget -= newAmount;
+            console.log('💰 [차감] 일반 예산:', updatedGeneralBudget + newAmount, '→', updatedGeneralBudget);
+          } else if (newAccount === '회비') {
+            updatedMembershipFee -= newAmount;
+            console.log('💰 [차감] 회비:', updatedMembershipFee + newAmount, '→', updatedMembershipFee);
+          } else if (newAccount === '찬조금') {
+            updatedDonations -= newAmount;
+            console.log('💰 [차감] 찬조금:', updatedDonations + newAmount, '→', updatedDonations);
+          }
+
+          // 3단계: State 및 Supabase 업데이트
+          setGeneralBudget(updatedGeneralBudget);
+          setMembershipFee(updatedMembershipFee);
+          setDonations(updatedDonations);
+
+          updateSettingInSupabase('general_budget', updatedGeneralBudget);
+          updateSettingInSupabase('membership_fee', updatedMembershipFee);
+          updateSettingInSupabase('donations', updatedDonations);
+
+          console.log('✅ 최종 결과:', {
+            일반예산: updatedGeneralBudget,
+            회비: updatedMembershipFee,
+            찬조금: updatedDonations
+          });
+
+          const updatedExpense = {
+            ...editingExpense,
+            date: formData.date,
+            amount: newAmount,
+            category: formData.category,
+            memo: formData.memo,
+            account: newAccount,
+            receipts: receiptFileNames
+          };
+
+          await updateExpenseInSupabase(updatedExpense);
+          setExpenses(expenses.map(exp =>
+            exp.id === editingExpense.id ? updatedExpense : exp
+          ));
+
+          setEditingExpense(null);
+          setFormData({
+            date: new Date().toISOString().split('T')[0],
+            amount: '',
+            category: '찬양팀 식사',
+            memo: '',
+            account: '일반 예산',
+            receipts: []
+          });
+
+          console.log('✅ 수정 완료 - 대시보드 카드 자동 업데이트');
+          alert('✅ 수정되었습니다!');
+        } catch (error) {
+          console.error('수정 중 오류:', error);
+          alert('수정 중 오류가 발생했습니다: ' + error.message);
+        }
+      };
+
+      // 회비 납부 추가
+      const handleMembershipSubmit = (e) => {
+        e.preventDefault();
+        const newEntry = {
+          id: Date.now(),
+          ...membershipFormData,
+          amount: parseInt(membershipFormData.amount)
+        };
+
+        const newMembershipList = [...membershipList, newEntry];
+        setMembershipList(newMembershipList);
+
+        const newTotal = membershipFee + parseInt(membershipFormData.amount);
+        setMembershipFee(newTotal);
+        updateSettingInSupabase('membership_fee', newTotal);
+
+        setMembershipFormData({
+          date: new Date().toISOString().split('T')[0],
+          name: '',
+          amount: '',
+          memo: ''
+        });
+        setShowMembershipForm(false);
+      };
+
+      // 찬조금 추가
+      const handleDonationsSubmit = (e) => {
+        e.preventDefault();
+        const newEntry = {
+          id: Date.now(),
+          ...donationsFormData,
+          amount: parseInt(donationsFormData.amount)
+        };
+
+        const newDonationsList = [...donationsList, newEntry];
+        setDonationsList(newDonationsList);
+
+        const newTotal = donations + parseInt(donationsFormData.amount);
+        setDonations(newTotal);
+        updateSettingInSupabase('donations', newTotal);
+
+        setDonationsFormData({
+          date: new Date().toISOString().split('T')[0],
+          name: '',
+          amount: '',
+          memo: ''
+        });
+        setShowDonationsForm(false);
+      };
+
+      const exportData = () => {
+        const data = { expenses, generalBudget, donations, membershipFee, membershipList, donationsList };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `회계데이터_2026_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      };
+
+      const importData = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = JSON.parse(e.target.result);
+              setExpenses(data.expenses || []);
+              setGeneralBudget(data.generalBudget || INITIAL_GENERAL_BUDGET);
+              setDonations(data.donations || INITIAL_DONATIONS);
+              setMembershipFee(data.membershipFee || INITIAL_MEMBERSHIP);
+              setMembershipList(data.membershipList || []);
+              setDonationsList(data.donationsList || []);
+              alert('데이터를 불러왔습니다!');
+            } catch (err) {
+              alert('잘못된 파일 형식입니다.');
+            }
+          };
+          reader.readAsText(file);
+        }
+      };
+
+      // 대시보드 합계 계산 (현재 State 기반 - 명확한 독립성)
+
+      // 1. 총 지출: expenses 배열의 실제 합계 (단일 진실의 원천)
+      const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+      // 2. 총 예산: 초기값들의 합 (고정값)
+      const totalBudget = INITIAL_GENERAL_BUDGET + INITIAL_MEMBERSHIP + INITIAL_DONATIONS;
+
+      // 3. 남은 예산: 현재 각 항목의 잔액 순수 합계 (실시간 독립 반영)
+      //    - 일반 예산에서 지출 시: generalBudget만 감소 → remainingBudget 감소
+      //    - 회비에서 지출 시: membershipFee만 감소 → remainingBudget 감소
+      //    - 찬조금에서 지출 시: donations만 감소 → remainingBudget 감소
+      const remainingBudget = generalBudget + membershipFee + donations;
+
+      // 하위 호환성을 위한 변수
+      const totalExpenses = totalSpent;
+
+      const monthlyStats = Array.from({ length: 12 }, (_, i) => {
+        const month = i + 1;
+        const monthExpenses = expenses.filter(e => {
+          const expenseMonth = new Date(e.date).getMonth() + 1;
+          return expenseMonth === month;
+        });
+        return {
+          month,
+          total: monthExpenses.reduce((sum, e) => sum + e.amount, 0),
+          count: monthExpenses.length
+        };
+      });
+
+      const currentMonthExpenses = expenses.filter(e => {
+        const expenseMonth = new Date(e.date).getMonth() + 1;
+        return expenseMonth === selectedMonth;
+      });
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          padding: '16px',
+        }}>
+          <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <h1 style={{
+                  fontSize: '28px',
+                  fontWeight: '900',
+                  color: '#fff',
+                  margin: '0 0 4px 0',
+                  fontFamily: "'Orbitron', monospace"
+                }}>
+                  2026 회계 관리 V2
+                </h1>
+                <p style={{ color: 'rgba(255,255,255,0.9)', margin: 0, fontSize: '14px' }}>
+                  고도화 버전 · 출처 추적 · 다중 영수증
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
+                  <Icon type="plus" size={18} /> 추가
+                </button>
+                <button className="btn" style={{ background: 'white', color: '#1f2937', padding: '10px 16px' }} onClick={exportData}>
+                  <Icon type="download" size={18} />
+                </button>
+                <label className="btn" style={{ background: 'white', color: '#1f2937', cursor: 'pointer', padding: '10px 16px' }}>
+                  <Icon type="upload" size={18} />
+                  <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} />
+                </label>
+                <button
+                  className="btn"
+                  style={{ background: '#ef4444', color: 'white', padding: '10px 16px' }}
+                  onClick={clearAllData}
+                  title="모든 데이터 삭제"
+                >
+                  <Icon type="trash" size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              {[
+                { mode: 'dashboard', label: '📊 대시보드' },
+                { mode: 'list', label: '📋 내역' },
+                { mode: 'monthly', label: '📅 월별' },
+                { mode: 'people', label: '👥 명단' }
+              ].map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  className="btn"
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    background: viewMode === mode ? 'white' : 'rgba(255,255,255,0.2)',
+                    color: viewMode === mode ? '#667eea' : 'white',
+                    fontWeight: viewMode === mode ? '700' : '600',
+                    padding: '10px 20px',
+                    fontSize: '14px'
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Dashboard View */}
+            {viewMode === 'dashboard' && (
+              <>
+                {/* Summary Cards */}
+                <div className="stat-grid">
+                  <div className="card" style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>총 예산</div>
+                    <div className="number-display" style={{ fontSize: '24px' }}>
+                      {formatNumber(totalBudget)}원
+                    </div>
+                  </div>
+
+                  <div className="card" style={{
+                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                    color: 'white',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>총 지출</div>
+                    <div className="number-display" style={{ fontSize: '24px' }}>
+                      {formatNumber(totalExpenses)}원
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.8 }}>
+                      {expenses.length}건
+                    </div>
+                  </div>
+
+                  <div className="card" style={{
+                    background: remainingBudget >= 0
+                      ? 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
+                      : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                    color: 'white',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>
+                      남은예산
+                    </div>
+                    <div className="number-display" style={{ fontSize: '24px' }}>
+                      {formatNumber(Math.abs(remainingBudget))}원
+                    </div>
+                  </div>
+                </div>
+
+                {/* 항목별 독립 예산 카드 (3개 독립 항목) */}
+                <div className="stat-grid">
+                  <div className="card" style={{
+                    background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                    color: '#1f2937',
+                    padding: '16px',
+                    border: '2px solid rgba(255,255,255,0.3)'
+                  }}>
+                    <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '4px', fontWeight: '600' }}>일반 예산</div>
+                    <div className="number-display" style={{ fontSize: '24px', fontWeight: '700' }}>
+                      {formatNumber(generalBudget)}원
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.6 }}>
+                      초기 3,200,000원
+                    </div>
+                  </div>
+
+                  <div className="card" style={{
+                    background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                    color: 'white',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>회비</div>
+                    <div className="number-display" style={{ fontSize: '24px' }}>
+                      {formatNumber(membershipFee)}원
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.8 }}>
+                      초기 496,000원 · {membershipList.length}건
+                    </div>
+                  </div>
+
+                  <div className="card" style={{
+                    background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                    color: 'white',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>찬조금</div>
+                    <div className="number-display" style={{ fontSize: '24px' }}>
+                      {formatNumber(donations)}원
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.8 }}>
+                      초기 11,133원 · {donationsList.length}건
+                    </div>
+                  </div>
+                </div>
+
+                {/* Monthly Overview */}
+                <div className="card">
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>
+                    월별 지출 현황
+                  </h3>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    {monthlyStats.filter(m => m.total > 0).map(stat => (
+                      <div key={stat.month} className="month-item">
+                        <div>
+                          <div style={{ fontWeight: '600', fontSize: '14px' }}>
+                            {stat.month}월
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            {stat.count}건
+                          </div>
+                        </div>
+                        <div className="number-display" style={{ fontSize: '18px', fontWeight: '700', color: '#667eea' }}>
+                          {formatNumber(stat.total)}원
+                        </div>
+                      </div>
+                    ))}
+                    {monthlyStats.filter(m => m.total > 0).length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+                        아직 지출 내역이 없습니다
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <div className="card">
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
+                  전체 지출 ({expenses.length}건)
+                </h3>
+                {expenses.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                    지출 내역이 없습니다
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: '12px' }}>
+                    {expenses.sort((a, b) => new Date(b.date) - new Date(a.date)).map(expense => (
+                      <div key={expense.id} style={{
+                        padding: '12px',
+                        background: '#f9fafb',
+                        borderRadius: '12px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div>
+                            <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                              {expense.date} · {expense.account || '일반 예산'}
+                            </div>
+                            <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                              {formatNumber(expense.amount)}원
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                              {expense.category}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                            {expense.receipts && expense.receipts.length > 0 && (
+                              <button
+                                className="btn"
+                                style={{ padding: '6px 12px', background: '#f3f4f6', color: '#1f2937', fontSize: '12px' }}
+                                onClick={() => openReceipt(expense.receipts[0])}
+                                title="영수증 보기"
+                              >
+                                <Icon type="eye" size={14} /> {expense.receipts.length}
+                              </button>
+                            )}
+                            <button
+                              className="btn"
+                              style={{ padding: '6px 12px', background: '#667eea', color: 'white', fontSize: '12px' }}
+                              onClick={() => startEditExpense(expense)}
+                              title="수정"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              onClick={() => deleteExpense(expense.id)}
+                              title="삭제"
+                            >
+                              <Icon type="trash" size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        {expense.memo && (
+                          <div style={{ fontSize: '13px', color: '#6b7280' }}>{expense.memo}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Monthly View */}
+            {viewMode === 'monthly' && (
+              <>
+                <div className="card" style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>월별 상세</h3>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="input-field"
+                      style={{ width: 'auto', padding: '8px 16px' }}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                        <option key={m} value={m}>{m}월</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div style={{
+                    padding: '16px',
+                    background: 'linear-gradient(135deg, #667eea22 0%, #764ba222 100%)',
+                    borderRadius: '12px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '6px' }}>
+                      {selectedMonth}월 총 지출
+                    </div>
+                    <div className="number-display" style={{ fontSize: '28px', fontWeight: '700', color: '#1f2937' }}>
+                      {formatNumber(currentMonthExpenses.reduce((sum, e) => sum + e.amount, 0))}원
+                    </div>
+                  </div>
+
+                  {currentMonthExpenses.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                      {selectedMonth}월 지출 없음
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {currentMonthExpenses.sort((a, b) => new Date(b.date) - new Date(a.date)).map(expense => (
+                        <div key={expense.id} style={{
+                          padding: '12px',
+                          background: '#f9fafb',
+                          borderRadius: '12px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                            <div>
+                              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                                {expense.date} · {expense.account || '일반 예산'}
+                              </div>
+                              <div style={{ fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                                {formatNumber(expense.amount)}원
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                                {expense.category}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                              {expense.receipts && expense.receipts.length > 0 && (
+                                <button
+                                  className="btn"
+                                  style={{ padding: '6px 12px', background: '#f3f4f6', color: '#1f2937', fontSize: '12px' }}
+                                  onClick={() => openReceipt(expense.receipts[0])}
+                                  title="영수증 보기"
+                                >
+                                  <Icon type="eye" size={14} /> {expense.receipts.length}
+                                </button>
+                              )}
+                              <button
+                                className="btn"
+                                style={{ padding: '6px 12px', background: '#667eea', color: 'white', fontSize: '12px' }}
+                                onClick={() => startEditExpense(expense)}
+                                title="수정"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                className="btn btn-danger"
+                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                onClick={() => deleteExpense(expense.id)}
+                                title="삭제"
+                              >
+                                <Icon type="trash" size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {expense.memo && (
+                            <div style={{ fontSize: '13px', color: '#6b7280' }}>{expense.memo}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* People (명단) View */}
+            {viewMode === 'people' && (
+              <>
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>회비 납부 명단</h3>
+                    <button className="btn btn-primary" onClick={() => setShowMembershipForm(true)} style={{ padding: '8px 16px' }}>
+                      <Icon type="plus" size={16} /> 추가
+                    </button>
+                  </div>
+                  {membershipList.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+                      회비 납부 내역이 없습니다
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      {membershipList.sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => (
+                        <div key={item.id} style={{
+                          padding: '12px',
+                          background: '#f9fafb',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: '600' }}>{item.name}</div>
+                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.date}</div>
+                            {item.memo && <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.memo}</div>}
+                          </div>
+                          <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
+                            {formatNumber(item.amount)}원
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>찬조금 명단</h3>
+                    <button className="btn btn-primary" onClick={() => setShowDonationsForm(true)} style={{ padding: '8px 16px' }}>
+                      <Icon type="plus" size={16} /> 추가
+                    </button>
+                  </div>
+                  {donationsList.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+                      찬조금 내역이 없습니다
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      {donationsList.sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => (
+                        <div key={item.id} style={{
+                          padding: '12px',
+                          background: '#f9fafb',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: '600' }}>{item.name}</div>
+                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.date}</div>
+                            {item.memo && <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.memo}</div>}
+                          </div>
+                          <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
+                            {formatNumber(item.amount)}원
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Add Expense Modal */}
+            {showAddForm && (
+              <div className="modal-overlay" onClick={() => setShowAddForm(false)}>
+                <div className="modal" onClick={(e) => e.stopPropagation()}>
+                  <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: '700' }}>
+                    지출 추가
+                  </h2>
+                  <form onSubmit={handleSubmit}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        날짜
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        className="input-field"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        금액 (원)
+                      </label>
+                      <input
+                        type="text"
+                        value={formatNumber(formData.amount)}
+                        onChange={(e) => {
+                          const numericValue = parseNumber(e.target.value);
+                          if (numericValue === '' || /^\d+$/.test(numericValue)) {
+                            setFormData({ ...formData, amount: numericValue });
+                          }
+                        }}
+                        className="input-field"
+                        placeholder="50,000"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        출처 (Account)
+                      </label>
+                      <select
+                        value={formData.account}
+                        onChange={(e) => setFormData({ ...formData, account: e.target.value })}
+                        className="input-field"
+                        required
+                      >
+                        <option value="일반 예산">일반 예산</option>
+                        <option value="회비">회비</option>
+                        <option value="찬조금">찬조금</option>
+                      </select>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        카테고리
+                      </label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        className="input-field"
+                        required
+                      >
+                        <option value="찬양팀 식사">찬양팀 식사</option>
+                        <option value="MT">MT</option>
+                        <option value="기타">기타</option>
+                        <option value="예비비">예비비</option>
+                      </select>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        메모
+                      </label>
+                      <textarea
+                        value={formData.memo}
+                        onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
+                        className="input-field"
+                        rows="2"
+                        placeholder="예) 10명 식사"
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        영수증 사진 (최대 5장)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="input-field"
+                        style={{ padding: '8px' }}
+                      />
+                      {formData.receipts.length > 0 && (
+                        <div className="receipt-preview-grid">
+                          {formData.receipts.map((receipt, index) => (
+                            <div key={index} className="receipt-preview-item">
+                              <img src={receipt} alt={`영수증 ${index + 1}`} />
+                              <button
+                                type="button"
+                                className="receipt-remove-btn"
+                                onClick={() => removeReceipt(index)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                        추가
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }}
+                        onClick={() => setShowAddForm(false)}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Expense Modal */}
+            {editingExpense && (
+              <div className="modal-overlay" onClick={cancelEditExpense}>
+                <div className="modal" onClick={(e) => e.stopPropagation()}>
+                  <h2 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: '700' }}>지출 수정</h2>
+                  <form onSubmit={handleEditSubmit}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        날짜
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        className="input-field"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        금액 (원)
+                      </label>
+                      <input
+                        type="text"
+                        value={formatNumber(formData.amount)}
+                        onChange={(e) => {
+                          const numericValue = parseNumber(e.target.value);
+                          if (numericValue === '' || /^\d+$/.test(numericValue)) {
+                            setFormData({ ...formData, amount: numericValue });
+                          }
+                        }}
+                        className="input-field"
+                        placeholder="50,000"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        출처 (Account)
+                      </label>
+                      <select
+                        value={formData.account}
+                        onChange={(e) => setFormData({ ...formData, account: e.target.value })}
+                        className="input-field"
+                        required
+                      >
+                        <option value="일반 예산">일반 예산</option>
+                        <option value="회비">회비</option>
+                        <option value="찬조금">찬조금</option>
+                      </select>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        카테고리
+                      </label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        className="input-field"
+                        required
+                      >
+                        <option>찬양팀 식사</option>
+                        <option>악기 구입</option>
+                        <option>악보/음원</option>
+                        <option>장비 유지보수</option>
+                        <option>행사비</option>
+                        <option>기타</option>
+                      </select>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        메모
+                      </label>
+                      <textarea
+                        value={formData.memo}
+                        onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
+                        className="input-field"
+                        rows="3"
+                        placeholder="간단한 메모를 입력하세요"
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>
+                        영수증 사진 추가 (기존: {editingExpense.receipts?.length || 0}장)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="input-field"
+                        style={{ padding: '8px' }}
+                      />
+                      {formData.receipts.length > 0 && (
+                        <div className="receipt-preview-grid">
+                          {formData.receipts.map((receipt, index) => (
+                            <div key={index} className="receipt-preview-item">
+                              <img src={receipt} alt={`새 영수증 ${index + 1}`} />
+                              <button
+                                type="button"
+                                className="receipt-remove-btn"
+                                onClick={() => removeReceipt(index)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }}
+                        onClick={cancelEditExpense}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Membership Form Modal */}
+            {showMembershipForm && (
+              <div className="modal-overlay" onClick={() => setShowMembershipForm(false)}>
+                <div className="modal" onClick={(e) => e.stopPropagation()}>
+                  <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: '700' }}>
+                    회비 납부 추가
+                  </h2>
+                  <form onSubmit={handleMembershipSubmit}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>날짜</label>
+                      <input
+                        type="date"
+                        value={membershipFormData.date}
+                        onChange={(e) => setMembershipFormData({ ...membershipFormData, date: e.target.value })}
+                        className="input-field"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>이름</label>
+                      <input
+                        type="text"
+                        value={membershipFormData.name}
+                        onChange={(e) => setMembershipFormData({ ...membershipFormData, name: e.target.value })}
+                        className="input-field"
+                        placeholder="홍길동"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>금액 (원)</label>
+                      <input
+                        type="text"
+                        value={formatNumber(membershipFormData.amount)}
+                        onChange={(e) => {
+                          const numericValue = parseNumber(e.target.value);
+                          if (numericValue === '' || /^\d+$/.test(numericValue)) {
+                            setMembershipFormData({ ...membershipFormData, amount: numericValue });
+                          }
+                        }}
+                        className="input-field"
+                        placeholder="10,000"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>비고</label>
+                      <textarea
+                        value={membershipFormData.memo}
+                        onChange={(e) => setMembershipFormData({ ...membershipFormData, memo: e.target.value })}
+                        className="input-field"
+                        rows="2"
+                        placeholder="비고사항"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>추가</button>
+                      <button type="button" className="btn" style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }} onClick={() => setShowMembershipForm(false)}>취소</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Donations Form Modal */}
+            {showDonationsForm && (
+              <div className="modal-overlay" onClick={() => setShowDonationsForm(false)}>
+                <div className="modal" onClick={(e) => e.stopPropagation()}>
+                  <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: '700' }}>
+                    찬조금 추가
+                  </h2>
+                  <form onSubmit={handleDonationsSubmit}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>날짜</label>
+                      <input
+                        type="date"
+                        value={donationsFormData.date}
+                        onChange={(e) => setDonationsFormData({ ...donationsFormData, date: e.target.value })}
+                        className="input-field"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>이름</label>
+                      <input
+                        type="text"
+                        value={donationsFormData.name}
+                        onChange={(e) => setDonationsFormData({ ...donationsFormData, name: e.target.value })}
+                        className="input-field"
+                        placeholder="홍길동"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>금액 (원)</label>
+                      <input
+                        type="text"
+                        value={formatNumber(donationsFormData.amount)}
+                        onChange={(e) => {
+                          const numericValue = parseNumber(e.target.value);
+                          if (numericValue === '' || /^\d+$/.test(numericValue)) {
+                            setDonationsFormData({ ...donationsFormData, amount: numericValue });
+                          }
+                        }}
+                        className="input-field"
+                        placeholder="50,000"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '14px' }}>내용</label>
+                      <textarea
+                        value={donationsFormData.memo}
+                        onChange={(e) => setDonationsFormData({ ...donationsFormData, memo: e.target.value })}
+                        className="input-field"
+                        rows="2"
+                        placeholder="기부 내용"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>추가</button>
+                      <button type="button" className="btn" style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }} onClick={() => setShowDonationsForm(false)}>취소</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Receipt View Modal */}
+            {viewingReceipt && (
+              <div className="modal-overlay" onClick={() => setViewingReceipt(null)}>
+                <div
+                  className="modal"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: '720px', padding: '16px' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>영수증</h3>
+                    <button
+                      className="btn"
+                      style={{ padding: '6px 12px', background: '#f3f4f6', color: '#1f2937', fontSize: '12px' }}
+                      onClick={() => setViewingReceipt(null)}
+                    >
+                      <Icon type="x" size={14} />
+                    </button>
+                  </div>
+                  <img
+                    src={viewingReceipt}
+                    alt="영수증"
+                    style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '12px', background: '#f9fafb' }}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: '100%', marginTop: '12px' }}
+                    onClick={() => setViewingReceipt(null)}
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AccountingApp />);
+  </script>
+
+  <script>
+    const CACHE_BUST = 'v=20260109-1';
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register(`service-worker.js?${CACHE_BUST}`)
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed'));
+      });
+    }
+  </script>
+</body>
+</html>
