@@ -237,6 +237,8 @@
       const [showMembershipForm, setShowMembershipForm] = useState(false);
       const [showDonationsForm, setShowDonationsForm] = useState(false);
       const [editingExpense, setEditingExpense] = useState(null);
+      const [editingMembership, setEditingMembership] = useState(null);
+      const [editingDonation, setEditingDonation] = useState(null);
       const [viewMode, setViewMode] = useState('dashboard');
       const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
       const [viewingReceipt, setViewingReceipt] = useState(null);
@@ -833,54 +835,110 @@
         }
       };
 
-      // 회비 납부 추가
+      // 회비 납부 추가 및 수정 로직 (수정됨)
       const handleMembershipSubmit = (e) => {
         e.preventDefault();
-        const newEntry = {
-          id: Date.now(),
-          ...membershipFormData,
-          amount: parseInt(membershipFormData.amount)
-        };
+        const newAmount = parseInt(membershipFormData.amount) || 0;
 
-        const newMembershipList = [...membershipList, newEntry];
-        setMembershipList(newMembershipList);
+        if (editingMembership) {
+          // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
+          const oldAmount = editingMembership.amount;
+          const newTotal = membershipFee - oldAmount + newAmount;
 
-        const newTotal = membershipFee + parseInt(membershipFormData.amount);
-        setMembershipFee(newTotal);
-        updateSettingInSupabase('membership_fee', newTotal);
+          setMembershipFee(newTotal);
+          updateSettingInSupabase('membership_fee', newTotal);
+          setMembershipList(membershipList.map(item =>
+            item.id === editingMembership.id ? { ...item, ...membershipFormData, amount: newAmount } : item
+          ));
+          setEditingMembership(null);
+        } else {
+          // [추가 모드] 잔액 = 현재잔액 + 입금액
+          const newEntry = { id: Date.now(), ...membershipFormData, amount: newAmount };
+          const newTotal = membershipFee + newAmount;
 
-        setMembershipFormData({
-          date: new Date().toISOString().split('T')[0],
-          name: '',
-          amount: '',
-          memo: ''
-        });
+          setMembershipFee(newTotal);
+          updateSettingInSupabase('membership_fee', newTotal);
+          setMembershipList([...membershipList, newEntry]);
+        }
+
+        setMembershipFormData({ date: new Date().toISOString().split('T')[0], name: '', amount: '', memo: '' });
         setShowMembershipForm(false);
       };
 
-      // 찬조금 추가
+      // 찬조금 추가 및 수정 로직 (수정됨)
       const handleDonationsSubmit = (e) => {
         e.preventDefault();
-        const newEntry = {
-          id: Date.now(),
-          ...donationsFormData,
-          amount: parseInt(donationsFormData.amount)
-        };
+        const newAmount = parseInt(donationsFormData.amount) || 0;
 
-        const newDonationsList = [...donationsList, newEntry];
-        setDonationsList(newDonationsList);
+        if (editingDonation) {
+          // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
+          const oldAmount = editingDonation.amount;
+          const newTotal = donations - oldAmount + newAmount;
 
-        const newTotal = donations + parseInt(donationsFormData.amount);
-        setDonations(newTotal);
-        updateSettingInSupabase('donations', newTotal);
+          setDonations(newTotal);
+          updateSettingInSupabase('donations', newTotal);
+          setDonationsList(donationsList.map(item =>
+            item.id === editingDonation.id ? { ...item, ...donationsFormData, amount: newAmount } : item
+          ));
+          setEditingDonation(null);
+        } else {
+          // [추가 모드] 잔액 = 현재잔액 + 입금액
+          const newEntry = { id: Date.now(), ...donationsFormData, amount: newAmount };
+          const newTotal = donations + newAmount;
 
-        setDonationsFormData({
-          date: new Date().toISOString().split('T')[0],
-          name: '',
-          amount: '',
-          memo: ''
-        });
+          setDonations(newTotal);
+          updateSettingInSupabase('donations', newTotal);
+          setDonationsList([...donationsList, newEntry]);
+        }
+
+        setDonationsFormData({ date: new Date().toISOString().split('T')[0], name: '', amount: '', memo: '' });
         setShowDonationsForm(false);
+      };
+
+      // 회비 수정 시작
+      const startEditMembership = (item) => {
+        setEditingMembership(item);
+        setMembershipFormData({
+          date: item.date,
+          name: item.name,
+          amount: item.amount.toString(),
+          memo: item.memo || ''
+        });
+        setShowMembershipForm(true);
+      };
+
+      // 찬조금 수정 시작
+      const startEditDonation = (item) => {
+        setEditingDonation(item);
+        setDonationsFormData({
+          date: item.date,
+          name: item.name,
+          amount: item.amount.toString(),
+          memo: item.memo || ''
+        });
+        setShowDonationsForm(true);
+      };
+
+      // 회비 삭제
+      const deleteMembership = (id) => {
+        if (window.confirm('이 회비 내역을 삭제하시겠습니까?')) {
+          const target = membershipList.find(item => item.id === id);
+          const newTotal = membershipFee - target.amount;
+          setMembershipFee(newTotal);
+          updateSettingInSupabase('membership_fee', newTotal);
+          setMembershipList(membershipList.filter(item => item.id !== id));
+        }
+      };
+
+      // 찬조금 삭제
+      const deleteDonation = (id) => {
+        if (window.confirm('이 찬조금 내역을 삭제하시겠습니까?')) {
+          const target = donationsList.find(item => item.id === id);
+          const newTotal = donations - target.amount;
+          setDonations(newTotal);
+          updateSettingInSupabase('donations', newTotal);
+          setDonationsList(donationsList.filter(item => item.id !== id));
+        }
       };
 
       const exportData = () => {
@@ -1340,15 +1398,34 @@
                           borderRadius: '12px',
                           display: 'flex',
                           justifyContent: 'space-between',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          gap: '12px'
                         }}>
-                          <div>
+                          <div style={{ flex: 1 }}>
                             <div style={{ fontSize: '14px', fontWeight: '600' }}>{item.name}</div>
                             <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.date}</div>
                             {item.memo && <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.memo}</div>}
                           </div>
-                          <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
-                            {formatNumber(item.amount)}원
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
+                              {formatNumber(item.amount)}원
+                            </div>
+                            <button
+                              className="btn"
+                              style={{ padding: '6px 12px', background: '#667eea', color: 'white', fontSize: '12px' }}
+                              onClick={() => startEditMembership(item)}
+                              title="수정"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              onClick={() => deleteMembership(item.id)}
+                              title="삭제"
+                            >
+                              <Icon type="trash" size={14} />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1376,15 +1453,34 @@
                           borderRadius: '12px',
                           display: 'flex',
                           justifyContent: 'space-between',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          gap: '12px'
                         }}>
-                          <div>
+                          <div style={{ flex: 1 }}>
                             <div style={{ fontSize: '14px', fontWeight: '600' }}>{item.name}</div>
                             <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.date}</div>
                             {item.memo && <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.memo}</div>}
                           </div>
-                          <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
-                            {formatNumber(item.amount)}원
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
+                              {formatNumber(item.amount)}원
+                            </div>
+                            <button
+                              className="btn"
+                              style={{ padding: '6px 12px', background: '#667eea', color: 'white', fontSize: '12px' }}
+                              onClick={() => startEditDonation(item)}
+                              title="수정"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              onClick={() => deleteDonation(item.id)}
+                              title="삭제"
+                            >
+                              <Icon type="trash" size={14} />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1664,10 +1760,10 @@
 
             {/* Membership Form Modal */}
             {showMembershipForm && (
-              <div className="modal-overlay" onClick={() => setShowMembershipForm(false)}>
+              <div className="modal-overlay" onClick={() => { setShowMembershipForm(false); setEditingMembership(null); }}>
                 <div className="modal" onClick={(e) => e.stopPropagation()}>
                   <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: '700' }}>
-                    회비 납부 추가
+                    {editingMembership ? '회비 납부 수정' : '회비 납부 추가'}
                   </h2>
                   <form onSubmit={handleMembershipSubmit}>
                     <div style={{ marginBottom: '16px' }}>
@@ -1722,8 +1818,8 @@
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px' }}>
-                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>추가</button>
-                      <button type="button" className="btn" style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }} onClick={() => setShowMembershipForm(false)}>취소</button>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingMembership ? '수정' : '추가'}</button>
+                      <button type="button" className="btn" style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }} onClick={() => { setShowMembershipForm(false); setEditingMembership(null); }}>취소</button>
                     </div>
                   </form>
                 </div>
@@ -1732,10 +1828,10 @@
 
             {/* Donations Form Modal */}
             {showDonationsForm && (
-              <div className="modal-overlay" onClick={() => setShowDonationsForm(false)}>
+              <div className="modal-overlay" onClick={() => { setShowDonationsForm(false); setEditingDonation(null); }}>
                 <div className="modal" onClick={(e) => e.stopPropagation()}>
                   <h2 style={{ margin: '0 0 20px 0', fontSize: '22px', fontWeight: '700' }}>
-                    찬조금 추가
+                    {editingDonation ? '찬조금 수정' : '찬조금 추가'}
                   </h2>
                   <form onSubmit={handleDonationsSubmit}>
                     <div style={{ marginBottom: '16px' }}>
@@ -1790,8 +1886,8 @@
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px' }}>
-                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>추가</button>
-                      <button type="button" className="btn" style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }} onClick={() => setShowDonationsForm(false)}>취소</button>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingDonation ? '수정' : '추가'}</button>
+                      <button type="button" className="btn" style={{ flex: 1, background: '#f3f4f6', color: '#1f2937' }} onClick={() => { setShowDonationsForm(false); setEditingDonation(null); }}>취소</button>
                     </div>
                   </form>
                 </div>
