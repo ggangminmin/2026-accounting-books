@@ -27,23 +27,49 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. 초기 데이터 삽입 (중복 무시)
+-- 4. 회비 납부 명단 테이블
+CREATE TABLE IF NOT EXISTS membership (
+  id BIGINT PRIMARY KEY,
+  date DATE NOT NULL,
+  name TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  memo TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. 찬조금 명단 테이블
+CREATE TABLE IF NOT EXISTS donations_list (
+  id BIGINT PRIMARY KEY,
+  date DATE NOT NULL,
+  name TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  memo TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 6. 초기 데이터 삽입 (중복 무시)
 INSERT INTO settings (key, value) VALUES
   ('general_budget', 3200000),
   ('donations', 11133),
   ('membership_fee', 496000)
 ON CONFLICT (key) DO NOTHING;
 
--- 5. RLS 활성화
+-- 7. RLS 활성화
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE membership ENABLE ROW LEVEL SECURITY;
+ALTER TABLE donations_list ENABLE ROW LEVEL SECURITY;
 
--- 6. 정책 설정 (기존 정책이 있으면 삭제 후 재생성)
+-- 8. 정책 설정 (기존 정책이 있으면 삭제 후 재생성)
 DROP POLICY IF EXISTS "Enable all access for all users" ON expenses;
 DROP POLICY IF EXISTS "Enable all access for all users" ON settings;
+DROP POLICY IF EXISTS "Enable all access for all users" ON membership;
+DROP POLICY IF EXISTS "Enable all access for all users" ON donations_list;
 
 CREATE POLICY "Enable all access for all users" ON expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all access for all users" ON settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for all users" ON membership FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for all users" ON donations_list FOR ALL USING (true) WITH CHECK (true);
 
 -- 완료!
 -- 이제 앱에서 account와 receipts 필드를 사용할 수 있습니다.

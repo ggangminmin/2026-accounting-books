@@ -71,10 +71,12 @@ python -m http.server 8000
 
 브라우저에서 `http://localhost:8000` 접속
 
-### 3. Supabase 설정 (선택사항)
+### 3. Supabase 설정 (필수)
+
+**⚠️ V2.1.0 중요**: 회비/찬조금 명단이 Supabase에 저장됩니다. `migration.sql` 실행 필수!
 
 1. [Supabase](https://supabase.com)에서 프로젝트 생성
-2. SQL Editor에서 테이블 생성:
+2. SQL Editor에서 **`migration.sql` 파일 전체 내용 복사하여 실행**:
 
 ```sql
 -- 지출 내역 테이블

@@ -296,11 +296,33 @@
 
           if (settingsError) throw settingsError;
 
+          const { data: membershipData, error: membershipError } = await supabaseClient
+            .from('membership')
+            .select('*')
+            .order('date', { ascending: false });
+
+          if (membershipError) throw membershipError;
+
+          const { data: donationsListData, error: donationsListError } = await supabaseClient
+            .from('donations_list')
+            .select('*')
+            .order('date', { ascending: false });
+
+          if (donationsListError) throw donationsListError;
+
           if (expensesData) {
             setExpenses(expensesData.map(exp => ({
               ...exp,
               receipts: exp.receipts || []
             })));
+          }
+
+          if (membershipData) {
+            setMembershipList(membershipData);
+          }
+
+          if (donationsListData) {
+            setDonationsList(donationsListData);
           }
 
           let generalBudgetItem, donationsItem, membershipItem;
@@ -318,7 +340,9 @@
           console.log('✅ Supabase 데이터 로드 완료:', {
             일반예산: generalBudgetItem?.value || INITIAL_GENERAL_BUDGET,
             회비: membershipItem?.value || INITIAL_MEMBERSHIP,
-            찬조금: donationsItem?.value || INITIAL_DONATIONS
+            찬조금: donationsItem?.value || INITIAL_DONATIONS,
+            회비명단: membershipData?.length || 0,
+            찬조금명단: donationsListData?.length || 0
           });
         } catch (error) {
           console.error('❌ Supabase 로드 실패:', error);
@@ -473,6 +497,116 @@
           console.log('✅ 영수증 삭제 완료:', fileName);
         } catch (error) {
           console.error('❌ 영수증 삭제 실패:', error);
+        }
+      };
+
+      // Supabase에 회비 저장
+      const saveMembershipToSupabase = async (item) => {
+        try {
+          const { error } = await supabaseClient
+            .from('membership')
+            .insert([{
+              id: item.id,
+              date: item.date,
+              name: item.name,
+              amount: item.amount,
+              memo: item.memo
+            }]);
+          if (error) throw error;
+          console.log('✅ 회비 저장 완료:', item.id);
+        } catch (error) {
+          console.error('❌ 회비 저장 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에 회비 수정
+      const updateMembershipInSupabase = async (item) => {
+        try {
+          const { error } = await supabaseClient
+            .from('membership')
+            .update({
+              date: item.date,
+              name: item.name,
+              amount: item.amount,
+              memo: item.memo
+            })
+            .eq('id', item.id);
+          if (error) throw error;
+          console.log('✅ 회비 수정 완료:', item.id);
+        } catch (error) {
+          console.error('❌ 회비 수정 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에서 회비 삭제
+      const deleteMembershipFromSupabase = async (id) => {
+        try {
+          const { error } = await supabaseClient
+            .from('membership')
+            .delete()
+            .eq('id', id);
+          if (error) throw error;
+          console.log('✅ 회비 삭제 완료:', id);
+        } catch (error) {
+          console.error('❌ 회비 삭제 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에 찬조금 저장
+      const saveDonationToSupabase = async (item) => {
+        try {
+          const { error } = await supabaseClient
+            .from('donations_list')
+            .insert([{
+              id: item.id,
+              date: item.date,
+              name: item.name,
+              amount: item.amount,
+              memo: item.memo
+            }]);
+          if (error) throw error;
+          console.log('✅ 찬조금 저장 완료:', item.id);
+        } catch (error) {
+          console.error('❌ 찬조금 저장 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에 찬조금 수정
+      const updateDonationInSupabase = async (item) => {
+        try {
+          const { error } = await supabaseClient
+            .from('donations_list')
+            .update({
+              date: item.date,
+              name: item.name,
+              amount: item.amount,
+              memo: item.memo
+            })
+            .eq('id', item.id);
+          if (error) throw error;
+          console.log('✅ 찬조금 수정 완료:', item.id);
+        } catch (error) {
+          console.error('❌ 찬조금 수정 실패:', error);
+          throw error;
+        }
+      };
+
+      // Supabase에서 찬조금 삭제
+      const deleteDonationFromSupabase = async (id) => {
+        try {
+          const { error } = await supabaseClient
+            .from('donations_list')
+            .delete()
+            .eq('id', id);
+          if (error) throw error;
+          console.log('✅ 찬조금 삭제 완료:', id);
+        } catch (error) {
+          console.error('❌ 찬조금 삭제 실패:', error);
+          throw error;
         }
       };
 
@@ -836,63 +970,79 @@
       };
 
       // 회비 납부 추가 및 수정 로직 (수정됨)
-      const handleMembershipSubmit = (e) => {
+      const handleMembershipSubmit = async (e) => {
         e.preventDefault();
-        const newAmount = parseInt(membershipFormData.amount) || 0;
+        try {
+          const newAmount = parseInt(membershipFormData.amount) || 0;
 
-        if (editingMembership) {
-          // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
-          const oldAmount = editingMembership.amount;
-          const newTotal = membershipFee - oldAmount + newAmount;
+          if (editingMembership) {
+            // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
+            const oldAmount = editingMembership.amount;
+            const newTotal = membershipFee - oldAmount + newAmount;
 
-          setMembershipFee(newTotal);
-          updateSettingInSupabase('membership_fee', newTotal);
-          setMembershipList(membershipList.map(item =>
-            item.id === editingMembership.id ? { ...item, ...membershipFormData, amount: newAmount } : item
-          ));
-          setEditingMembership(null);
-        } else {
-          // [추가 모드] 잔액 = 현재잔액 + 입금액
-          const newEntry = { id: Date.now(), ...membershipFormData, amount: newAmount };
-          const newTotal = membershipFee + newAmount;
+            const updatedItem = { ...editingMembership, ...membershipFormData, amount: newAmount };
 
-          setMembershipFee(newTotal);
-          updateSettingInSupabase('membership_fee', newTotal);
-          setMembershipList([...membershipList, newEntry]);
+            setMembershipFee(newTotal);
+            updateSettingInSupabase('membership_fee', newTotal);
+            await updateMembershipInSupabase(updatedItem);
+            setMembershipList(membershipList.map(item =>
+              item.id === editingMembership.id ? updatedItem : item
+            ));
+            setEditingMembership(null);
+          } else {
+            // [추가 모드] 잔액 = 현재잔액 + 입금액
+            const newEntry = { id: Date.now(), ...membershipFormData, amount: newAmount };
+            const newTotal = membershipFee + newAmount;
+
+            setMembershipFee(newTotal);
+            updateSettingInSupabase('membership_fee', newTotal);
+            await saveMembershipToSupabase(newEntry);
+            setMembershipList([...membershipList, newEntry]);
+          }
+
+          setMembershipFormData({ date: new Date().toISOString().split('T')[0], name: '', amount: '', memo: '' });
+          setShowMembershipForm(false);
+        } catch (error) {
+          alert('저장 중 오류가 발생했습니다: ' + error.message);
         }
-
-        setMembershipFormData({ date: new Date().toISOString().split('T')[0], name: '', amount: '', memo: '' });
-        setShowMembershipForm(false);
       };
 
       // 찬조금 추가 및 수정 로직 (수정됨)
-      const handleDonationsSubmit = (e) => {
+      const handleDonationsSubmit = async (e) => {
         e.preventDefault();
-        const newAmount = parseInt(donationsFormData.amount) || 0;
+        try {
+          const newAmount = parseInt(donationsFormData.amount) || 0;
 
-        if (editingDonation) {
-          // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
-          const oldAmount = editingDonation.amount;
-          const newTotal = donations - oldAmount + newAmount;
+          if (editingDonation) {
+            // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
+            const oldAmount = editingDonation.amount;
+            const newTotal = donations - oldAmount + newAmount;
 
-          setDonations(newTotal);
-          updateSettingInSupabase('donations', newTotal);
-          setDonationsList(donationsList.map(item =>
-            item.id === editingDonation.id ? { ...item, ...donationsFormData, amount: newAmount } : item
-          ));
-          setEditingDonation(null);
-        } else {
-          // [추가 모드] 잔액 = 현재잔액 + 입금액
-          const newEntry = { id: Date.now(), ...donationsFormData, amount: newAmount };
-          const newTotal = donations + newAmount;
+            const updatedItem = { ...editingDonation, ...donationsFormData, amount: newAmount };
 
-          setDonations(newTotal);
-          updateSettingInSupabase('donations', newTotal);
-          setDonationsList([...donationsList, newEntry]);
+            setDonations(newTotal);
+            updateSettingInSupabase('donations', newTotal);
+            await updateDonationInSupabase(updatedItem);
+            setDonationsList(donationsList.map(item =>
+              item.id === editingDonation.id ? updatedItem : item
+            ));
+            setEditingDonation(null);
+          } else {
+            // [추가 모드] 잔액 = 현재잔액 + 입금액
+            const newEntry = { id: Date.now(), ...donationsFormData, amount: newAmount };
+            const newTotal = donations + newAmount;
+
+            setDonations(newTotal);
+            updateSettingInSupabase('donations', newTotal);
+            await saveDonationToSupabase(newEntry);
+            setDonationsList([...donationsList, newEntry]);
+          }
+
+          setDonationsFormData({ date: new Date().toISOString().split('T')[0], name: '', amount: '', memo: '' });
+          setShowDonationsForm(false);
+        } catch (error) {
+          alert('저장 중 오류가 발생했습니다: ' + error.message);
         }
-
-        setDonationsFormData({ date: new Date().toISOString().split('T')[0], name: '', amount: '', memo: '' });
-        setShowDonationsForm(false);
       };
 
       // 회비 수정 시작
@@ -920,24 +1070,34 @@
       };
 
       // 회비 삭제
-      const deleteMembership = (id) => {
+      const deleteMembership = async (id) => {
         if (window.confirm('이 회비 내역을 삭제하시겠습니까?')) {
-          const target = membershipList.find(item => item.id === id);
-          const newTotal = membershipFee - target.amount;
-          setMembershipFee(newTotal);
-          updateSettingInSupabase('membership_fee', newTotal);
-          setMembershipList(membershipList.filter(item => item.id !== id));
+          try {
+            const target = membershipList.find(item => item.id === id);
+            const newTotal = membershipFee - target.amount;
+            setMembershipFee(newTotal);
+            updateSettingInSupabase('membership_fee', newTotal);
+            await deleteMembershipFromSupabase(id);
+            setMembershipList(membershipList.filter(item => item.id !== id));
+          } catch (error) {
+            alert('삭제 중 오류가 발생했습니다: ' + error.message);
+          }
         }
       };
 
       // 찬조금 삭제
-      const deleteDonation = (id) => {
+      const deleteDonation = async (id) => {
         if (window.confirm('이 찬조금 내역을 삭제하시겠습니까?')) {
-          const target = donationsList.find(item => item.id === id);
-          const newTotal = donations - target.amount;
-          setDonations(newTotal);
-          updateSettingInSupabase('donations', newTotal);
-          setDonationsList(donationsList.filter(item => item.id !== id));
+          try {
+            const target = donationsList.find(item => item.id === id);
+            const newTotal = donations - target.amount;
+            setDonations(newTotal);
+            updateSettingInSupabase('donations', newTotal);
+            await deleteDonationFromSupabase(id);
+            setDonationsList(donationsList.filter(item => item.id !== id));
+          } catch (error) {
+            alert('삭제 중 오류가 발생했습니다: ' + error.message);
+          }
         }
       };
 
