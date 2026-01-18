@@ -222,13 +222,9 @@
     const AccountingApp = () => {
       // 초기 예산 설정 (각 항목별 독립적 관리)
       const INITIAL_GENERAL_BUDGET = 3200000;  // 일반 예산 초기값
-      const INITIAL_DONATIONS = 11133;         // 찬조금 초기값
-      const INITIAL_MEMBERSHIP = 496000;       // 회비 초기값
 
       // 독립적 잔액 State
       const [generalBudget, setGeneralBudget] = useState(INITIAL_GENERAL_BUDGET);
-      const [donations, setDonations] = useState(INITIAL_DONATIONS);
-      const [membershipFee, setMembershipFee] = useState(INITIAL_MEMBERSHIP);
 
       const [expenses, setExpenses] = useState([]);
       const [membershipList, setMembershipList] = useState([]);
@@ -325,22 +321,15 @@
             setDonationsList(donationsListData);
           }
 
-          let generalBudgetItem, donationsItem, membershipItem;
+          let generalBudgetItem;
 
           if (settingsData) {
             generalBudgetItem = settingsData.find(s => s.key === 'general_budget');
-            donationsItem = settingsData.find(s => s.key === 'donations');
-            membershipItem = settingsData.find(s => s.key === 'membership_fee');
-
             if (generalBudgetItem) setGeneralBudget(generalBudgetItem.value);
-            if (donationsItem) setDonations(donationsItem.value);
-            if (membershipItem) setMembershipFee(membershipItem.value);
           }
 
           console.log('✅ Supabase 데이터 로드 완료:', {
             일반예산: generalBudgetItem?.value || INITIAL_GENERAL_BUDGET,
-            회비: membershipItem?.value || INITIAL_MEMBERSHIP,
-            찬조금: donationsItem?.value || INITIAL_DONATIONS,
             회비명단: membershipData?.length || 0,
             찬조금명단: donationsListData?.length || 0
           });
@@ -611,29 +600,16 @@
       };
 
       useEffect(() => {
+        // Supabase 우선 로드 (localStorage는 백업용으로만 사용)
         loadFromSupabase();
-
-        const saved = localStorage.getItem('accounting_2026_v2');
-
-        if (saved) {
-          const data = JSON.parse(saved);
-          setExpenses(data.expenses || []);
-          setGeneralBudget(data.generalBudget || INITIAL_GENERAL_BUDGET);
-          setDonations(data.donations || INITIAL_DONATIONS);
-          setMembershipFee(data.membershipFee || INITIAL_MEMBERSHIP);
-          setMembershipList(data.membershipList || []);
-          setDonationsList(data.donationsList || []);
-        }
       }, []);
 
       useEffect(() => {
-        if (expenses.length > 0 || generalBudget !== INITIAL_GENERAL_BUDGET || donations !== INITIAL_DONATIONS || membershipFee !== INITIAL_MEMBERSHIP) {
+        if (expenses.length > 0 || generalBudget !== INITIAL_GENERAL_BUDGET) {
           try {
             const dataStr = JSON.stringify({
               expenses,
               generalBudget,
-              donations,
-              membershipFee,
               membershipList,
               donationsList
             });
@@ -643,7 +619,7 @@
             console.error('저장 오류:', e);
           }
         }
-      }, [expenses, generalBudget, donations, membershipFee, membershipList, donationsList]);
+      }, [expenses, generalBudget, membershipList, donationsList]);
 
       const handleImageUpload = (e) => {
         const files = Array.from(e.target.files);
@@ -728,23 +704,14 @@
             금액: parseInt(formData.amount)
           });
 
-          // 출처에 따라 해당 항목에서만 차감 (독립적 관리)
+          // 일반 예산만 직접 차감, 회비/찬조금은 자동 계산됨
           if (formData.account === '일반 예산') {
             const newGeneralBudget = generalBudget - parseInt(formData.amount);
             setGeneralBudget(newGeneralBudget);
             updateSettingInSupabase('general_budget', newGeneralBudget);
             console.log('✅ 일반 예산 차감:', generalBudget, '→', newGeneralBudget);
-          } else if (formData.account === '회비') {
-            const newMembershipFee = membershipFee - parseInt(formData.amount);
-            setMembershipFee(newMembershipFee);
-            updateSettingInSupabase('membership_fee', newMembershipFee);
-            console.log('✅ 회비 차감:', membershipFee, '→', newMembershipFee);
-          } else if (formData.account === '찬조금') {
-            const newDonations = donations - parseInt(formData.amount);
-            setDonations(newDonations);
-            updateSettingInSupabase('donations', newDonations);
-            console.log('✅ 찬조금 차감:', donations, '→', newDonations);
           }
+          // 회비/찬조금 지출은 expenses에 추가만 하면 자동 계산됨
 
           await saveExpenseToSupabase(newExpense);
           setExpenses([newExpense, ...expenses]);
@@ -768,28 +735,19 @@
           try {
             const target = expenses.find(exp => exp.id === id);
 
-            console.log('🗑️ 지출 삭제 - 예산 복원:', {
+            console.log('🗑️ 지출 삭제:', {
               출처: target.account,
               금액: target.amount
             });
 
-            // 해당 출처의 예산 복원 (독립적 관리)
+            // 일반 예산만 복원, 회비/찬조금은 자동 계산됨
             if (target.account === '일반 예산') {
               const newGeneralBudget = generalBudget + target.amount;
               setGeneralBudget(newGeneralBudget);
               updateSettingInSupabase('general_budget', newGeneralBudget);
               console.log('✅ 일반 예산 복원:', generalBudget, '→', newGeneralBudget);
-            } else if (target.account === '회비') {
-              const newMembershipFee = membershipFee + target.amount;
-              setMembershipFee(newMembershipFee);
-              updateSettingInSupabase('membership_fee', newMembershipFee);
-              console.log('✅ 회비 복원:', membershipFee, '→', newMembershipFee);
-            } else if (target.account === '찬조금') {
-              const newDonations = donations + target.amount;
-              setDonations(newDonations);
-              updateSettingInSupabase('donations', newDonations);
-              console.log('✅ 찬조금 복원:', donations, '→', newDonations);
             }
+            // 회비/찬조금 지출 삭제는 expenses에서 제거만 하면 자동 계산됨
 
             // 영수증 삭제
             if (target.receipts && target.receipts.length > 0) {
@@ -812,8 +770,6 @@
             localStorage.removeItem('accounting_2026_v2');
             setExpenses([]);
             setGeneralBudget(INITIAL_GENERAL_BUDGET);
-            setDonations(INITIAL_DONATIONS);
-            setMembershipFee(INITIAL_MEMBERSHIP);
             setMembershipList([]);
             setDonationsList([]);
             alert('✅ 모든 데이터가 삭제되었습니다.');
@@ -885,56 +841,30 @@
           const newAccount = formData.account;
           const newAmount = parseInt(formData.amount);
 
-          console.log('💾 수정 저장 - 예산 재계산:', {
+          console.log('💾 수정 저장:', {
             '기존': `${oldAccount} ${oldAmount}원`,
-            '새로운': `${newAccount} ${newAmount}원`,
-            '현재 일반예산': generalBudget,
-            '현재 회비': membershipFee,
-            '현재 찬조금': donations
+            '새로운': `${newAccount} ${newAmount}원`
           });
 
-          // 1단계: 기존 출처에 금액 복원
+          // 일반 예산만 수동 관리, 회비/찬조금은 자동 계산됨
           let updatedGeneralBudget = generalBudget;
-          let updatedMembershipFee = membershipFee;
-          let updatedDonations = donations;
 
+          // 기존이 일반 예산이면 복원
           if (oldAccount === '일반 예산') {
             updatedGeneralBudget += oldAmount;
-            console.log('🔄 [복원] 일반 예산:', generalBudget, '→', updatedGeneralBudget);
-          } else if (oldAccount === '회비') {
-            updatedMembershipFee += oldAmount;
-            console.log('🔄 [복원] 회비:', membershipFee, '→', updatedMembershipFee);
-          } else if (oldAccount === '찬조금') {
-            updatedDonations += oldAmount;
-            console.log('🔄 [복원] 찬조금:', donations, '→', updatedDonations);
           }
 
-          // 2단계: 새 출처에서 금액 차감
+          // 새로운이 일반 예산이면 차감
           if (newAccount === '일반 예산') {
             updatedGeneralBudget -= newAmount;
-            console.log('💰 [차감] 일반 예산:', updatedGeneralBudget + newAmount, '→', updatedGeneralBudget);
-          } else if (newAccount === '회비') {
-            updatedMembershipFee -= newAmount;
-            console.log('💰 [차감] 회비:', updatedMembershipFee + newAmount, '→', updatedMembershipFee);
-          } else if (newAccount === '찬조금') {
-            updatedDonations -= newAmount;
-            console.log('💰 [차감] 찬조금:', updatedDonations + newAmount, '→', updatedDonations);
           }
 
-          // 3단계: State 및 Supabase 업데이트
-          setGeneralBudget(updatedGeneralBudget);
-          setMembershipFee(updatedMembershipFee);
-          setDonations(updatedDonations);
-
-          updateSettingInSupabase('general_budget', updatedGeneralBudget);
-          updateSettingInSupabase('membership_fee', updatedMembershipFee);
-          updateSettingInSupabase('donations', updatedDonations);
-
-          console.log('✅ 최종 결과:', {
-            일반예산: updatedGeneralBudget,
-            회비: updatedMembershipFee,
-            찬조금: updatedDonations
-          });
+          // 일반 예산만 업데이트
+          if (oldAccount === '일반 예산' || newAccount === '일반 예산') {
+            setGeneralBudget(updatedGeneralBudget);
+            updateSettingInSupabase('general_budget', updatedGeneralBudget);
+            console.log('✅ 일반 예산 업데이트:', generalBudget, '→', updatedGeneralBudget);
+          }
 
           const updatedExpense = {
             ...editingExpense,
@@ -976,26 +906,18 @@
           const newAmount = parseInt(membershipFormData.amount) || 0;
 
           if (editingMembership) {
-            // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
-            const oldAmount = editingMembership.amount;
-            const newTotal = membershipFee - oldAmount + newAmount;
-
+            // [수정 모드] 명단만 수정, 잔액은 자동 계산됨
             const updatedItem = { ...editingMembership, ...membershipFormData, amount: newAmount };
 
-            setMembershipFee(newTotal);
-            updateSettingInSupabase('membership_fee', newTotal);
             await updateMembershipInSupabase(updatedItem);
             setMembershipList(membershipList.map(item =>
               item.id === editingMembership.id ? updatedItem : item
             ));
             setEditingMembership(null);
           } else {
-            // [추가 모드] 잔액 = 현재잔액 + 입금액
+            // [추가 모드] 명단에 추가, 잔액은 자동 계산됨
             const newEntry = { id: Date.now(), ...membershipFormData, amount: newAmount };
-            const newTotal = membershipFee + newAmount;
 
-            setMembershipFee(newTotal);
-            updateSettingInSupabase('membership_fee', newTotal);
             await saveMembershipToSupabase(newEntry);
             setMembershipList([...membershipList, newEntry]);
           }
@@ -1014,26 +936,18 @@
           const newAmount = parseInt(donationsFormData.amount) || 0;
 
           if (editingDonation) {
-            // [수정 모드] 잔액 = 현재잔액 - 기존금액 + 새금액
-            const oldAmount = editingDonation.amount;
-            const newTotal = donations - oldAmount + newAmount;
-
+            // [수정 모드] 명단만 수정, 잔액은 자동 계산됨
             const updatedItem = { ...editingDonation, ...donationsFormData, amount: newAmount };
 
-            setDonations(newTotal);
-            updateSettingInSupabase('donations', newTotal);
             await updateDonationInSupabase(updatedItem);
             setDonationsList(donationsList.map(item =>
               item.id === editingDonation.id ? updatedItem : item
             ));
             setEditingDonation(null);
           } else {
-            // [추가 모드] 잔액 = 현재잔액 + 입금액
+            // [추가 모드] 명단에 추가, 잔액은 자동 계산됨
             const newEntry = { id: Date.now(), ...donationsFormData, amount: newAmount };
-            const newTotal = donations + newAmount;
 
-            setDonations(newTotal);
-            updateSettingInSupabase('donations', newTotal);
             await saveDonationToSupabase(newEntry);
             setDonationsList([...donationsList, newEntry]);
           }
@@ -1073,12 +987,9 @@
       const deleteMembership = async (id) => {
         if (window.confirm('이 회비 내역을 삭제하시겠습니까?')) {
           try {
-            const target = membershipList.find(item => item.id === id);
-            const newTotal = membershipFee - target.amount;
-            setMembershipFee(newTotal);
-            updateSettingInSupabase('membership_fee', newTotal);
             await deleteMembershipFromSupabase(id);
             setMembershipList(membershipList.filter(item => item.id !== id));
+            // 잔액은 자동 계산되므로 별도 업데이트 불필요
           } catch (error) {
             alert('삭제 중 오류가 발생했습니다: ' + error.message);
           }
@@ -1089,12 +1000,9 @@
       const deleteDonation = async (id) => {
         if (window.confirm('이 찬조금 내역을 삭제하시겠습니까?')) {
           try {
-            const target = donationsList.find(item => item.id === id);
-            const newTotal = donations - target.amount;
-            setDonations(newTotal);
-            updateSettingInSupabase('donations', newTotal);
             await deleteDonationFromSupabase(id);
             setDonationsList(donationsList.filter(item => item.id !== id));
+            // 잔액은 자동 계산되므로 별도 업데이트 불필요
           } catch (error) {
             alert('삭제 중 오류가 발생했습니다: ' + error.message);
           }
@@ -1102,7 +1010,7 @@
       };
 
       const exportData = () => {
-        const data = { expenses, generalBudget, donations, membershipFee, membershipList, donationsList };
+        const data = { expenses, generalBudget, membershipList, donationsList };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1120,8 +1028,6 @@
               const data = JSON.parse(e.target.result);
               setExpenses(data.expenses || []);
               setGeneralBudget(data.generalBudget || INITIAL_GENERAL_BUDGET);
-              setDonations(data.donations || INITIAL_DONATIONS);
-              setMembershipFee(data.membershipFee || INITIAL_MEMBERSHIP);
               setMembershipList(data.membershipList || []);
               setDonationsList(data.donationsList || []);
               alert('데이터를 불러왔습니다!');
@@ -1133,19 +1039,23 @@
         }
       };
 
-      // 대시보드 합계 계산 (현재 State 기반 - 명확한 독립성)
+      // 대시보드 합계 계산
 
-      // 1. 총 지출: expenses 배열의 실제 합계 (단일 진실의 원천)
+      // 1. 회비/찬조금: 명단 합계 - 해당 계정 지출
+      const membershipIncome = membershipList.reduce((sum, item) => sum + item.amount, 0);
+      const donationsIncome = donationsList.reduce((sum, item) => sum + item.amount, 0);
+
+      const membershipExpenses = expenses.filter(e => e.account === '회비').reduce((sum, e) => sum + e.amount, 0);
+      const donationsExpenses = expenses.filter(e => e.account === '찬조금').reduce((sum, e) => sum + e.amount, 0);
+
+      const membershipFee = membershipIncome - membershipExpenses;
+      const donations = donationsIncome - donationsExpenses;
+
+      // 2. 총 지출: expenses 배열의 실제 합계
       const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-      // 2. 총 예산: 초기값들의 합 (고정값)
-      const totalBudget = INITIAL_GENERAL_BUDGET + INITIAL_MEMBERSHIP + INITIAL_DONATIONS;
-
-      // 3. 남은 예산: 현재 각 항목의 잔액 순수 합계 (실시간 독립 반영)
-      //    - 일반 예산에서 지출 시: generalBudget만 감소 → remainingBudget 감소
-      //    - 회비에서 지출 시: membershipFee만 감소 → remainingBudget 감소
-      //    - 찬조금에서 지출 시: donations만 감소 → remainingBudget 감소
-      const remainingBudget = generalBudget + membershipFee + donations;
+      // 3. 총 예산: 일반예산 + 회비잔액 + 찬조금잔액
+      const totalBudget = generalBudget + membershipFee + donations;
 
       // 하위 호환성을 위한 변수
       const totalExpenses = totalSpent;
@@ -1274,21 +1184,6 @@
                       {expenses.length}건
                     </div>
                   </div>
-
-                  <div className="card" style={{
-                    background: remainingBudget >= 0
-                      ? 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
-                      : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                    color: 'white',
-                    padding: '16px'
-                  }}>
-                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '4px' }}>
-                      남은예산
-                    </div>
-                    <div className="number-display" style={{ fontSize: '24px' }}>
-                      {formatNumber(Math.abs(remainingBudget))}원
-                    </div>
-                  </div>
                 </div>
 
                 {/* 항목별 독립 예산 카드 (3개 독립 항목) */}
@@ -1318,7 +1213,7 @@
                       {formatNumber(membershipFee)}원
                     </div>
                     <div style={{ fontSize: '11px', opacity: 0.8 }}>
-                      초기 496,000원 · {membershipList.length}건
+                      {membershipList.length}건
                     </div>
                   </div>
 
@@ -1332,7 +1227,7 @@
                       {formatNumber(donations)}원
                     </div>
                     <div style={{ fontSize: '11px', opacity: 0.8 }}>
-                      초기 11,133원 · {donationsList.length}건
+                      {donationsList.length}건
                     </div>
                   </div>
                 </div>
@@ -1539,9 +1434,9 @@
             {viewMode === 'people' && (
               <>
                 <div className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>회비 납부 명단</h3>
-                    <button className="btn btn-primary" onClick={() => setShowMembershipForm(true)} style={{ padding: '8px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>회비 납부 명단 ({membershipList.length})</h3>
+                    <button className="btn btn-primary" onClick={() => setShowMembershipForm(true)} style={{ padding: '8px 16px', fontSize: '13px' }}>
                       <Icon type="plus" size={16} /> 추가
                     </button>
                   </div>
@@ -1550,29 +1445,29 @@
                       회비 납부 내역이 없습니다
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gap: '8px' }}>
+                    <div style={{ display: 'grid', gap: '4px' }}>
                       {membershipList.sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => (
                         <div key={item.id} style={{
-                          padding: '12px',
+                          padding: '8px 12px',
                           background: '#f9fafb',
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          gap: '12px'
+                          gap: '8px'
                         }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '14px', fontWeight: '600' }}>{item.name}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.date}</div>
-                            {item.memo && <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.memo}</div>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '12px', color: '#6b7280', minWidth: '70px' }}>{item.date}</div>
+                            <div style={{ fontSize: '14px', fontWeight: '600', minWidth: '60px' }}>{item.name}</div>
+                            {item.memo && <div style={{ fontSize: '12px', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.memo}</div>}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
+                            <div className="number-display" style={{ fontSize: '15px', fontWeight: '700', color: '#667eea', minWidth: '80px', textAlign: 'right' }}>
                               {formatNumber(item.amount)}원
                             </div>
                             <button
                               className="btn"
-                              style={{ padding: '6px 12px', background: '#667eea', color: 'white', fontSize: '12px' }}
+                              style={{ padding: '4px 8px', background: '#667eea', color: 'white', fontSize: '12px', minWidth: 'auto' }}
                               onClick={() => startEditMembership(item)}
                               title="수정"
                             >
@@ -1580,7 +1475,7 @@
                             </button>
                             <button
                               className="btn btn-danger"
-                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              style={{ padding: '4px 8px', fontSize: '12px', minWidth: 'auto' }}
                               onClick={() => deleteMembership(item.id)}
                               title="삭제"
                             >
@@ -1594,9 +1489,9 @@
                 </div>
 
                 <div className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>찬조금 명단</h3>
-                    <button className="btn btn-primary" onClick={() => setShowDonationsForm(true)} style={{ padding: '8px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>찬조금 명단 ({donationsList.length})</h3>
+                    <button className="btn btn-primary" onClick={() => setShowDonationsForm(true)} style={{ padding: '8px 16px', fontSize: '13px' }}>
                       <Icon type="plus" size={16} /> 추가
                     </button>
                   </div>
@@ -1605,29 +1500,29 @@
                       찬조금 내역이 없습니다
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gap: '8px' }}>
+                    <div style={{ display: 'grid', gap: '4px' }}>
                       {donationsList.sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => (
                         <div key={item.id} style={{
-                          padding: '12px',
+                          padding: '8px 12px',
                           background: '#f9fafb',
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          gap: '12px'
+                          gap: '8px'
                         }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '14px', fontWeight: '600' }}>{item.name}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.date}</div>
-                            {item.memo && <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.memo}</div>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '12px', color: '#6b7280', minWidth: '70px' }}>{item.date}</div>
+                            <div style={{ fontSize: '14px', fontWeight: '600', minWidth: '60px' }}>{item.name}</div>
+                            {item.memo && <div style={{ fontSize: '12px', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.memo}</div>}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div className="number-display" style={{ fontSize: '16px', fontWeight: '700', color: '#667eea' }}>
+                            <div className="number-display" style={{ fontSize: '15px', fontWeight: '700', color: '#667eea', minWidth: '80px', textAlign: 'right' }}>
                               {formatNumber(item.amount)}원
                             </div>
                             <button
                               className="btn"
-                              style={{ padding: '6px 12px', background: '#667eea', color: 'white', fontSize: '12px' }}
+                              style={{ padding: '4px 8px', background: '#667eea', color: 'white', fontSize: '12px', minWidth: 'auto' }}
                               onClick={() => startEditDonation(item)}
                               title="수정"
                             >
@@ -1635,7 +1530,7 @@
                             </button>
                             <button
                               className="btn btn-danger"
-                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              style={{ padding: '4px 8px', fontSize: '12px', minWidth: 'auto' }}
                               onClick={() => deleteDonation(item.id)}
                               title="삭제"
                             >
